@@ -1,0 +1,2 @@
+2025-11-27 17:36:55,922 | {"event": "request", "prompt": "If it's warmer than 20\u00b0C in London, set the thermostat to 20\u00b0C, otherwise set it to 18\u00b0C.", "model": "gemini-2.5-flash", "config": {"include_thoughts": true}, "timestamp": 1764245215.92213}
+2025-11-27 17:37:12,435 | {"event": "response", "prompt": "If it's warmer than 20\u00b0C in London, set the thermostat to 20\u00b0C, otherwise set it to 18\u00b0C.", "response_text": "I have set the thermostat to 20\u00b0C.", "model": "gemini-2.5-flash", "latency_ms": 16.51}

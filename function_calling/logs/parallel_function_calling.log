@@ -1,0 +1,2 @@
+2025-11-27 17:37:46,923 | {"event": "request", "prompt": "Turn this place into a party!", "model": "gemini-2.5-flash"}
+2025-11-27 17:37:49,573 | {"event": "response", "prompt": "Turn this place into a party!", "response_text": null, "model": "gemini-2.5-flash", "latency_ms": 2.65}

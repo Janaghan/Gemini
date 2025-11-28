@@ -1,0 +1,2 @@
+2025-11-27 17:41:57,478 | {"event": "request", "prompt": "Do everything you need to this place into party!", "model": "gemini-2.5-flash"}
+2025-11-27 17:42:02,777 | {"event": "response", "response_text": "Alright, the disco ball is spinning, the music is loud and energetic, and the lights are dimmed. The party is ready!", "model": "gemini-2.5-flash", "latency_ms": 5.3}

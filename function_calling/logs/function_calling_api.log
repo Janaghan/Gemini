@@ -1,0 +1,2 @@
+2025-11-27 17:41:38,121 | {"event": "request", "prompt": "Schedule a meeting with Bob and Alice for 03/14/2025 at 10:00 AM about the Q3 planning.", "model": "gemini-2.5-flash", "timestamp": 1764245498.1217344}
+2025-11-27 17:41:40,421 | {"event": "response", "prompt": "Schedule a meeting with Bob and Alice for 03/14/2025 at 10:00 AM about the Q3 planning.", "response_text": null, "model": "gemini-2.5-flash", "latency_ms": 2.3}
