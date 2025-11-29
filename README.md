@@ -4,7 +4,7 @@ This repository contains code for interacting with Google's Gemini API, includin
 
 ## Structure
 
--   **`chat_bot/`**: Contains the main chatbot implementation (`thinking.py`, `main.py`) with advanced features like:
+-   **`chat_bot/`**: Contains the main chatbot implementation ( `main.py`) with advanced features like:
     -   **Thinking Mode**: Uses a "thinking budget" to reason before answering.
     -   **Tool Use**: Integrates with external tools (e.g., Air Quality monitoring via OpenMeteo).
     -   **Multi-turn Chat**: Supports conversational history.
