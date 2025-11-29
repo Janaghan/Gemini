@@ -1,8 +1,8 @@
 import requests
 
-traffic_info_declaration = {
-    "name": "get_traffic_info",
-    "description": "Fetch real-time traffic for a given location using TomTom Traffic API.",
+air_quality_declaration = {
+    "name": "get_air_quality",
+    "description": "Fetch real-time air quality for a given location using OpenMeteo API.",
     "parameters": {
         "type": "object",
         "properties": {
