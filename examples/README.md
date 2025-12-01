@@ -4,11 +4,19 @@ This directory contains various standalone examples demonstrating different capa
 
 ## Directories
 
--   **`Image_understanding/`**:
+-   **`Document_understanding/`**:
+    -   Examples of processing PDF documents.
+    -   Includes handling large local PDFs and PDFs from URLs.
+
+-   **`image_understanding/`**:
     -   Scripts for analyzing images, object detection, and segmentation.
     -   Demonstrates multimodal capabilities.
 
--   **`Text-to-Text/`**:
+-   **`structured_output/`**:
+    -   Examples of extracting structured data (JSON) from text.
+    -   Demonstrates using Pydantic models for schema definition.
+
+-   **`text_to_text/`**:
     -   Basic text generation examples.
     -   Simple prompts and responses.
 
@@ -26,6 +34,6 @@ Navigate to the specific directory and run the scripts using `uv run` or `python
 
 Example:
 ```bash
-cd Image_understanding
+cd image_understanding
 uv run object_detection.py
 ```

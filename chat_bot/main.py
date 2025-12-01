@@ -5,16 +5,12 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 import os
-from lmnr import Laminar, observe
+from lmnr import Laminar
+from log_setup import start_span, end_span, observe
 from tools import tools
-
 load_dotenv()
 Laminar.initialize(project_api_key=os.environ.get("laminar_api_key"))
 client = genai.Client(api_key=os.environ.get("gemini_api_key"))
-
-# Create a mapping for easy tool execution
-tool_map = {func.__name__: func for func in tools}
-
 SYSTEM_INSTRUCTIONS = """You are an intelligent and helpful AI assistant.
 
 **Capabilities:**
@@ -30,82 +26,113 @@ SYSTEM_INSTRUCTIONS = """You are an intelligent and helpful AI assistant.
 """
 
 def parser():
-    parser = argparse.ArgumentParser(description="Gemini Chatbot")
+    parser = argparse.ArgumentParser()
+
     parser.add_argument('-t', '--thinking_budget', type=int, default=1,
                         help='Thinking budget for Gemini')
-    parser.add_argument('--no-tools', action='store_true',
-                        help='Disable tools')
-    parser.add_argument('-lc', '--long_context', action='store_true',
-                        help='Enable long context (Default: Enabled if file exists)')
+
+    parser.add_argument('-f', '--function_calling', action='store_true',
+                        help='Enable function calling')
+
+    parser.add_argument('-m', '--multichat', action='store_true',
+                        help='Enable multi-turn chat')
+
     return parser.parse_args()
+
+
+@observe("tool_execution")
+def execute_tool(tool_name: str, tool_args: dict) -> str:
+    """Execute a tool by name with given arguments."""
+    target_tool = next((t for t in tools if t.__name__ == tool_name), None)
+
+    if not target_tool:
+        return f"Unknown function called: {tool_name}"
+
+    try:
+        result = target_tool(**tool_args)
+        return f"Function executed: {result}"
+    except Exception as e:
+        return f"Error executing function {tool_name}: {e}"
+
 
 args = parser()
 
-@observe()
-def execute_tool(name, args):
-    if name in tool_map:
-        try:
-            print(f"System: Executing tool '{name}' with args: {args}")
-            result = tool_map[name](**args)
-            return result
-        except Exception as e:
-            return f"Error executing tool {name}: {e}"
-    return f"Error: Tool {name} not found."
 
-@observe()
-def chat_session():
+@observe("gemini_request")
+def Text_bot(prompt):
+
     model = "gemini-2.5-flash"
-    history = []
-    
-    # Load context once
-    global SYSTEM_INSTRUCTIONS
-    try:
-        with open("tamilnadu_history.txt", "r") as f:
-            history_context = f.read()
-        SYSTEM_INSTRUCTIONS += f"\n\nHere is some historical context about Tamil Nadu:\n{history_context}"
-        print("System: Loaded Tamil Nadu history context.")
-    except FileNotFoundError:
-        if args.long_context:
-             print("Warning: --long_context requested but tamilnadu_history.txt not found.")
-        else:
-             print("System: Tamil Nadu history context file not found. Proceeding without it.")
 
-    print("\n--- Gemini Chatbot (Interactive) ---")
-    print("Type 'exit' or 'quit' to end the session.")
-    
-    # Config setup once
-    config = types.GenerateContentConfig(
-        system_instruction=SYSTEM_INSTRUCTIONS,
-        tools=tools if not args.no_tools else None,
-        thinking_config=types.ThinkingConfig(
-            thinking_budget=1024
-        ) 
-    )
+    if args.function_calling:
+        # Use the tools imported from tools.py
+        # tools is already a list of functions, which the SDK supports
+        
+        contents = [types.Content(role="user", parts=[types.Part(text=prompt)])]
 
-    while True:
-        try:
-            user_msg = input("\nYou: ")
-            if user_msg.lower() in ["exit", "quit"]:
-                print("Exiting chat. Goodbye!")
+        response = client.models.generate_content(
+            model=model,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                tools=tools,
+                system_instruction=SYSTEM_INSTRUCTIONS
+            )
+        )
+
+        # 1. Check for automatic function calls (SDK handled)
+        if hasattr(response, "automatic_function_calling_history") and response.automatic_function_calling_history:
+            for content in response.automatic_function_calling_history:
+                for part in content.parts:
+                    if hasattr(part, "function_call") and part.function_call:
+                        fn = part.function_call
+
+        # 2. Check for manual function call (if auto-execution didn't happen or was disabled)
+        function_call_part = None
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, "function_call") and part.function_call:
+                function_call_part = part
                 break
+
+        if function_call_part:
+           
+            fn = function_call_part.function_call
+            reply = execute_tool(fn.name, fn.args)
+
+        else:
             
+            reply = response.text or ""
+
+
+    elif args.multichat:
+
+        history = []
+        print("Multichat started. Type 'exit' to quit.\n")
+
+        while True:
+            user_msg = input("You: ")
+            if user_msg.lower() in ["exit", "quit"]:
+                print("Exiting multichat.\n")
+                break
+
             history.append(types.Content(
                 role="user", parts=[types.Part(text=user_msg)]
             ))
-            
+
             response = client.models.generate_content(
                 model=model,
                 contents=history,
-                config=config
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTIONS,
+                    tools=tools # Enable tools in multichat as well
+                )
             )
 
             if not response.candidates or not response.candidates[0].content:
-                print("Gemini: (No response content)")
+                print("Gemini: (No response content. Likely blocked or empty.)\n")
                 continue
 
             model_reply = response.candidates[0].content
             
-            # Handle function calls
+            # Handle function calls in multichat if they occur
             function_call_part = None
             for part in model_reply.parts:
                 if hasattr(part, "function_call") and part.function_call:
@@ -114,51 +141,46 @@ def chat_session():
             
             if function_call_part:
                 fn = function_call_part.function_call
-                tool_result = execute_tool(fn.name, fn.args)
-                
-                # Send tool result back to model
-                func_resp_part = types.Part(
-                    function_response=types.FunctionResponse(
-                        name=fn.name,
-                        response={"result": tool_result} 
-                    )
-                )
-                
-                history.append(model_reply) # Add the model's call to history
-                
-                history.append(types.Content(
-                    role="user", 
-                    parts=[func_resp_part]
-                ))
-                
-                # Generate again with the tool result
-                response2 = client.models.generate_content(
-                    model=model,
-                    contents=history,
-                    config=config
-                )
-                
-                if response2.candidates and response2.candidates[0].content:
-                    reply_text = "".join(
-                        p.text for p in response2.candidates[0].content.parts if hasattr(p, "text")
-                    )
-                    history.append(response2.candidates[0].content)
-                    print(f"Gemini: {reply_text}")
-                else:
-                    print("Gemini: (No response after tool execution)")
+                reply_text = execute_tool(fn.name, fn.args)
 
             else:
                 reply_text = "".join(
                     p.text for p in model_reply.parts if hasattr(p, "text")
                 )
-                history.append(model_reply)
-                print(f"Gemini: {reply_text}")
 
-        except KeyboardInterrupt:
-            print("\nExiting chat.")
-            break
-        except Exception as e:
-            print(f"Error: {e}")
+            history.append(model_reply)
 
-if __name__ == "__main__":
-    chat_session()
+            # multichat turn observed by the surrounding gemini_request decorator
+
+            print(f"Gemini: {reply_text}\n")
+
+        end_span(span_id)
+        return ""
+
+    else:
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config= types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(
+                    thinking_budget=args.thinking_budget
+                ),
+                system_instruction=SYSTEM_INSTRUCTIONS
+            )
+            # metadata={"laminar_span_id": span_id}
+        )
+
+        reply = response.text or ""
+
+    return reply
+
+
+
+if args.multichat:
+    answer = Text_bot(prompt=None)
+    print("Answer:", answer)
+else:
+    prompt = input("Enter your prompt: ")
+    answer = Text_bot(prompt)
+    print("Answer:", answer)
+    

@@ -39,11 +39,3 @@ This repository contains code for interacting with Google's Gemini API, includin
     LAMINAR_API_KEY=your_laminar_key_here
     ```
 
-## Usage
-
-To run the chatbot:
-```bash
-uv run chat_bot/thinking.py -f  # Function calling mode
-uv run chat_bot/thinking.py -m  # Multichat mode
-uv run chat_bot/thinking.py -t 5 # Thinking mode with budget
-```
