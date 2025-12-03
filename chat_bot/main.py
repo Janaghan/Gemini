@@ -5,8 +5,7 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 import os
-from lmnr import Laminar
-from log_setup import start_span, end_span, observe
+from lmnr import Laminar,observe
 from tools import tools
 load_dotenv()
 Laminar.initialize(project_api_key=os.environ.get("laminar_api_key"))
