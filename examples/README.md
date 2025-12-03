@@ -4,7 +4,7 @@ This directory contains various standalone examples demonstrating different capa
 
 ## Directories
 
--   **`Document_understanding/`**:
+-   **`document_understanding/`**:
     -   Examples of processing PDF documents.
     -   Includes handling large local PDFs and PDFs from URLs.
 
