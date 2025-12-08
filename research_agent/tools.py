@@ -32,9 +32,15 @@ def upload_file(client, file_path: str):
 
     mime_type, _ = mimetypes.guess_type(file_path)
     if not mime_type:
-        mime_type = "application/pdf" # Default to PDF if unknown
+        # Fallback for common types if mimetypes fails or returns None
+        if file_path.endswith(".txt"):
+            mime_type = "text/plain"
+        elif file_path.endswith(".pdf"):
+            mime_type = "application/pdf"
+        else:
+            mime_type = "application/pdf" # Default to PDF if unknown
 
-    print(f"Uploading {file_path}...")
+    print(f"Uploading {file_path} as {mime_type}...")
     with open(file_path, "rb") as f:
         uploaded_file = client.files.upload(
             file=f,
@@ -43,6 +49,14 @@ def upload_file(client, file_path: str):
     
     print(f"File uploaded: {uploaded_file.name}")
     return uploaded_file
+
+def get_google_search_tool():
+    """
+    Returns the Google Search tool.
+    """
+    return types.Tool(
+        google_search=types.GoogleSearch()
+    )
 
 def get_analysis_prompt(query: str):
     """

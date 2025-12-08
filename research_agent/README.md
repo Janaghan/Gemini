@@ -1,10 +1,11 @@
 # Research Agent
 
-This agent is designed to analyze documents (PDFs) and provide structured research summaries using Google's Gemini models.
+This agent is designed to analyze documents (PDFs, Text files) and provide structured research summaries using Google's Gemini models. It can also perform Google Searches when no file is provided.
 
 ## Features
 
--   **Document Analysis**: Uploads and processes PDF documents.
+-   **Document Analysis**: Uploads and processes PDF and Text documents.
+-   **Google Search**: Performs Google Searches and synthesizes results when no document is provided.
 -   **Structured Output**: Generates JSON responses containing:
     -   Comprehensive summary.
     -   Key research points with relevance and confidence scores.
@@ -28,18 +29,37 @@ This agent is designed to analyze documents (PDFs) and provide structured resear
 
 ## Usage
 
-1.  **Prepare Document**:
-    Place your PDF file (e.g., `sample_document.pdf`) in the `research_agent` directory.
+Run the agent from the command line using `main.py`.
 
-2.  **Run the Agent**:
-    ```bash
-    python main.py
-    ```
+### Analyze a File
+To analyze a PDF or Text file:
+```bash
+python main.py --file <path_to_file> --query "<your_query>"
+```
+**Example:**
+```bash
+python main.py --file sample_document.pdf --query "Summarize this document"
+```
 
-3.  **Output**:
-    The agent will print the analysis to the console and save the structured result to `research_results.json`.
+### Google Search
+To perform a Google Search (without a file):
+```bash
+python main.py --query "<your_search_query>"
+```
+**Example:**
+```bash
+python main.py --query "Who won the 2023 Cricket World Cup?"
+```
+
+### Interactive Mode
+If you run `main.py` without arguments, it will prompt you for a query (and default to search if no file is specified in code, though CLI usage is recommended).
+
+## Output
+
+The agent will print the analysis to the console and save the structured result to `research_result.json`.
 
 ## File Structure
 
 -   `main.py`: Entry point. Handles file upload, generation request, and response processing.
 -   `tools.py`: Contains helper functions and Pydantic models (`ResearchSummary`, `ResearchPoint`) for structured output.
+
