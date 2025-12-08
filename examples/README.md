@@ -28,6 +28,14 @@ This directory contains various standalone examples demonstrating different capa
     -   Experiments with the "thinking" model (reasoning).
     -   Includes budget management and streaming examples.
 
+-   **`google_search/`**:
+    -   Examples of using the Google Search tool for grounding.
+
+-   **`text_to_speech/`**:
+    -   **`single_tts.py`**: Basic text-to-speech with a single voice.
+    -   **`multiple_tts.py`**: Multi-speaker conversation generation.
+    -   **`audio.py`**: End-to-end example: Generates a transcript using Gemini and then converts it to a multi-speaker audio podcast.
+
 ## Running Examples
 
 Navigate to the specific directory and run the scripts using `uv run` or `python`.
