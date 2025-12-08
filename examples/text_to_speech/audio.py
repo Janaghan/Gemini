@@ -19,8 +19,8 @@ def wave_file(filename, pcm, channels=1, rate=24000, sample_width=2):
 transcript = client.models.generate_content(
    model="gemini-2.5-flash",
    contents="""Generate a short transcript around 100 words that reads
-            like it was clipped from a podcast by excited herpetologists.
-            The hosts names are Dr. Anya and Liam.""").text
+            Tell me the current political activities.
+            The hosts names are Arun and Karthik.""").text
 
 @observe()
 def audio():
@@ -33,7 +33,7 @@ def audio():
             multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
                 speaker_voice_configs=[
                 types.SpeakerVoiceConfig(
-                    speaker='Dr. Anya',
+                    speaker='Arun',
                     voice_config=types.VoiceConfig(
                         prebuilt_voice_config=types.PrebuiltVoiceConfig(
                             voice_name='Kore',
@@ -41,7 +41,7 @@ def audio():
                     )
                 ),
                 types.SpeakerVoiceConfig(
-                    speaker='Liam',
+                    speaker=Karthik',
                     voice_config=types.VoiceConfig(
                         prebuilt_voice_config=types.PrebuiltVoiceConfig(
                             voice_name='Puck',
