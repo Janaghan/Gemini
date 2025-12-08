@@ -41,7 +41,7 @@ def audio():
                     )
                 ),
                 types.SpeakerVoiceConfig(
-                    speaker=Karthik',
+                    speaker='Karthik',
                     voice_config=types.VoiceConfig(
                         prebuilt_voice_config=types.PrebuiltVoiceConfig(
                             voice_name='Puck',
