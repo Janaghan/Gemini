@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 import os
 import mimetypes
+import wave
 
 import json
 
@@ -37,6 +38,8 @@ def upload_file(client, file_path: str):
             mime_type = "text/plain"
         elif file_path.endswith(".pdf"):
             mime_type = "application/pdf"
+        elif file_path.endswith(".wav"):
+            mime_type = "audio/wav"
         else:
             mime_type = "application/pdf" # Default to PDF if unknown
 
@@ -68,3 +71,39 @@ def get_analysis_prompt(query: str):
     
     Query: {query}
     """
+
+def text_to_speech(client, text: str, output_file: str = "output.wav"):
+    """
+    Converts text to speech using Gemini TTS model.
+    """
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash-preview-tts",
+            contents=text,
+            config=types.GenerateContentConfig(
+                response_modalities=["AUDIO"],
+                speech_config=types.SpeechConfig(
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                            voice_name='Kore',
+                        )
+                    )
+                ),
+            ),
+        )
+        
+        data = response.candidates[0].content.parts[0].inline_data.data
+        
+        with wave.open(output_file, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(24000)
+            wf.writeframes(data)
+            
+        print(f"Audio saved to {output_file}")
+        return output_file
+
+    except Exception as e:
+        print(f"Error generating audio: {e}")
+        return None
+

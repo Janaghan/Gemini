@@ -29,123 +29,196 @@ if not client:
     exit(1)
 
 @observe()
-def main():
-    print("--- Research Agent ---")
+def analyze_file(client, uploaded_file, query, chat_history):
+    """
+    Analyzes an uploaded file using Gemini.
+    """
+    contents = []
+    for history_item in chat_history:
+        contents.append(history_item)
     
-    # Configuration
+    contents.append(query)
+    contents.append(uploaded_file)
+    
+    prompt = f"""
+        You are analyzing a provided document together with the user's query.
+
+        Your rules:
+        1. Only answer questions that can be directly answered using information present in the document.
+        2. If the query is not found, not relevant, or not supported by the document, DO NOT answer the question.
+        - Instead, set the 'summary' field to: "The query does not match the content of the document. Please provide a query related to the document."
+        - Leave 'key_points' and 'sources' as empty lists.
+        3. If the document is audio, first transcribe it accurately, then analyze.
+        4. Extract key research points that directly relate to the query, and include:
+            - the extracted points  
+            - their relevance  
+            - a confidence score (0.0-1.0)
+        5. Provide a comprehensive summary ONLY of the parts of the document relevant to the query.
+        6. List the specific pages, timestamps, or sections used—only if they exist in the document.
+
+        Query: {query}
+        """
+    contents.append(prompt)
+    
+    is_audio = uploaded_file.mime_type.startswith("audio/")
+    model_name = "gemini-2.5-flash" if is_audio else "gemini-2.5-flash-lite"
+    
+    response = client.models.generate_content(
+        model=model_name,
+        contents=contents,
+        config={
+            "response_mime_type": "application/json",
+            "response_json_schema": tools.ResearchSummary.model_json_schema(),
+        },
+    )
+    return response
+
+@observe()
+def perform_search(client, query, chat_history):
+    """
+    Performs a Google Search and structures the result.
+    """
+    contents = []
+    for history_item in chat_history:
+        contents.append(history_item)
+    
+    contents.append(query)
+    
+    tools_list = [tools.get_google_search_tool()]
+    
+    print(f"Searching Google for: '{query}'")
+    prompt = f"""
+    Search Google for the following query and provide a structured answer.
+    
+    Query: {query}
+    """
+    contents.append(prompt)
+    
+    # Step 1: Search
+    search_response = client.models.generate_content(
+        model="gemini-2.5-flash-lite",
+        contents=contents,
+        config={
+            "tools": tools_list,
+        },
+    )
+    
+    if not search_response.text:
+        return None
+
+    # Step 2: Structure
+    print("  Step 2: Structuring the information...")
+    
+    citations = []
+    if search_response.candidates[0].grounding_metadata and search_response.candidates[0].grounding_metadata.grounding_chunks:
+        for chunk in search_response.candidates[0].grounding_metadata.grounding_chunks:
+            if chunk.web:
+                citations.append(f"{chunk.web.title}: {chunk.web.uri}")
+    
+    citations_text = "\n".join(citations)
+    
+    structure_prompt = f"""
+    Based on the following search results, provide a structured research summary.
+    
+    Search Results:
+    {search_response.text}
+    
+    Sources/Citations found:
+    {citations_text}
+    
+    IMPORTANT: Include the above Sources/Citations in the 'sources' list of your JSON output.
+    """
+    
+    response = client.models.generate_content(
+        model="gemini-2.5-flash-lite",
+        contents=[structure_prompt],
+        config={
+            "response_mime_type": "application/json",
+            "response_json_schema": tools.ResearchSummary.model_json_schema(),
+        },
+    )
+    return response
+
+@observe()
+def main():
+    print("--- Research Agent (Interactive) ---")
+    print("Type 'exit' or 'quit' to stop.")
     
     parser = argparse.ArgumentParser(description="Research Agent")
     parser.add_argument("--file", type=str, help="Path to the file (PDF, Text, Audio) to analyze")
-    parser.add_argument("--query", type=str, help="Query to ask about the file or general search")
+    parser.add_argument("--query", type=str, help="Initial query to ask about the file or general search")
+    parser.add_argument("--speak", action="store_true", help="Speak the summary output")
     args = parser.parse_args()
 
     file_path = args.file
-    query = args.query
-
-    if not query:
-        query = input("Enter your query: ")
-
-    tools_list = [tools.get_google_search_tool()]
-    contents = [query]
-
+    initial_query = args.query
+    chat_history = []
+    
+    uploaded_file = None
     if file_path:
         if not os.path.exists(file_path):
             print(f"Error: {file_path} not found. Please ensure the file exists.")
             return
         
-        print(f"Analyzing {file_path} with query: '{query}'")
-        # Upload file
+        print(f"Uploading {file_path}...")
         uploaded_file = tools.upload_file(client, file_path)
-        contents.append(uploaded_file)
+        print(f"File uploaded: {uploaded_file.name}")
         
-        # Get prompt
-        prompt = f"""
-        Analyze the provided file and the following query.
-        Extract key research points, their relevance, and a confidence score (0.0-1.0).
-        Also provide a comprehensive summary and list the sources or page numbers used.
-        If the file is audio, transcribe and analyze the content.
-        
-        Query: {query}
-        """
-        contents.append(prompt)
-    else:
-        print(f"Searching Google for: '{query}'")
-        prompt = f"""
-        Search Google for the following query and provide a structured answer.
-        
-        Query: {query}
-        """
-        contents.append(prompt)
+        if uploaded_file.mime_type.startswith("audio/"):
+            print("Audio file detected. Using gemini-2.5-flash for transcription and analysis.")
 
-    try:
-        # print("Generating structured analysis...")
-        
-        if file_path:
-            # Direct structured analysis for files
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=contents,
-                config={
-                    "response_mime_type": "application/json",
-                    "response_json_schema": tools.ResearchSummary.model_json_schema(),
-                },
-            )
+    while True:
+        if initial_query:
+            query = initial_query
+            initial_query = None 
         else:
-            # Search mode: Two-step process
-            # Step 1: Search and get text response
-            # print("  Step 1: Searching and gathering information...")
-            search_response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=contents,
-                config={
-                    "tools": tools_list,
-                },
-                # No JSON schema here, as it conflicts with tools
-            )
-            
-            if not search_response.text:
-                print("No results found from search.")
-                return
-
-            # Step 2: Structure the output
-            print("  Step 2: Structuring the information...")
-            structure_prompt = f"""
-            Based on the following search results, provide a structured research summary.
-            
-            Search Results:
-            {search_response.text}
-            """
-            
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=[structure_prompt],
-                config={
-                    "response_mime_type": "application/json",
-                    "response_json_schema": tools.ResearchSummary.model_json_schema(),
-                },
-            )
-
-        if response.text:
-             # Parse JSON response
             try:
-                result = json.loads(response.text)
-                print(json.dumps(result, indent=2))
-                
-                # Save to file
-                output_filename = "research_result.json"
-                with open(output_filename, "w") as f:
-                    json.dump(result, f, indent=2)
-                print(f"Result saved to {output_filename}")
+                query = input("\nUser: ")
+            except EOFError:
+                break
 
-            except json.JSONDecodeError:
-                print("Error: Could not decode JSON response.")
-                print(response.text)
-        else:
-            print("No text response generated.")
+        if query.lower() in ["exit", "quit"]:
+            print("Exiting...")
+            break
+        
+        if not query.strip():
+            continue
 
+        try:
+            response = None
+            if uploaded_file:
+                response = analyze_file(client, uploaded_file, query, chat_history)
+            else:
+                response = perform_search(client, query, chat_history)
+                if not response:
+                    print("No results found from search.")
+                    continue
 
-    except Exception as e:
-        print(f"An error occurred: {e}")
+            if response and response.text:
+                try:
+                    result = json.loads(response.text)
+                    print("\nAgent:")
+                    print(json.dumps(result, indent=2))
+                    
+                    output_filename = "research_result.json"
+                    with open(output_filename, "w") as f:
+                        json.dump(result, f, indent=2)
+                    
+                    if args.speak:
+                        print("Generating audio output...")
+                        tools.text_to_speech(client, result.get("summary", "No summary available."))
+
+                    chat_history.append(f"User: {query}")
+                    chat_history.append(f"Agent: {result.get('summary', 'Analysis provided.')}")
+
+                except json.JSONDecodeError:
+                    print("Error: Could not decode JSON response.")
+                    print(response.text)
+            else:
+                print("No text response generated.")
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     main()
