@@ -143,7 +143,6 @@ def main():
     parser.add_argument("--file", type=str, help="Path to the file (PDF, Text, Audio) to analyze")
     parser.add_argument("--query", type=str, help="Initial query to ask about the file or general search")
     parser.add_argument("--speak", action="store_true", help="Speak the summary output")
-    parser.add_argument("--cache", action="store_true", help="Use context caching for the file")
     args = parser.parse_args()
 
     file_path = args.file
