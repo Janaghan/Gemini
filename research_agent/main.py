@@ -1,15 +1,4 @@
-#!/usr/bin/env python3
-"""
-Research Agent
 
-Usage:
-  python main.py --file <path_to_file> --query "<query>"
-  python main.py --query "<query>"
-
-Examples:
-  python main.py --file sample.pdf --query "Summarize this document"
-  python main.py --query "Who won the 2023 Cricket World Cup?"
-"""
 import os
 from dotenv import load_dotenv
 from google import genai
@@ -29,7 +18,7 @@ if not client:
     exit(1)
 
 @observe()
-def analyze_file(client, uploaded_file, query, chat_history):
+def analyze_file(client, uploaded_file, query, chat_history, cache_name=None):
     """
     Analyzes an uploaded file using Gemini.
     """
@@ -38,7 +27,8 @@ def analyze_file(client, uploaded_file, query, chat_history):
         contents.append(history_item)
     
     contents.append(query)
-    contents.append(uploaded_file)
+    if not cache_name:
+        contents.append(uploaded_file)
     
     prompt = f"""
         You are analyzing a provided document together with the user's query.
@@ -60,9 +50,15 @@ def analyze_file(client, uploaded_file, query, chat_history):
         """
     contents.append(prompt)
     
-    is_audio = uploaded_file.mime_type.startswith("audio/")
-    model_name = "gemini-2.5-flash" if is_audio else "gemini-2.5-flash-lite"
     
+    is_audio = uploaded_file.mime_type.startswith("audio/")
+
+    model_name = "gemini-2.5-flash"
+    
+
+    if cache_name:
+        config["cached_content"] = cache_name
+
     response = client.models.generate_content(
         model=model_name,
         contents=contents,
@@ -96,7 +92,7 @@ def perform_search(client, query, chat_history):
     
     # Step 1: Search
     search_response = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
+        model="gemini-2.5-flash",
         contents=contents,
         config={
             "tools": tools_list,
@@ -118,19 +114,18 @@ def perform_search(client, query, chat_history):
     citations_text = "\n".join(citations)
     
     structure_prompt = f"""
-    Based on the following search results, provide a structured research summary.
-    
-    Search Results:
-    {search_response.text}
-    
-    Sources/Citations found:
-    {citations_text}
-    
-    IMPORTANT: Include the above Sources/Citations in the 'sources' list of your JSON output.
+    Based on the following search results, provide a structured research summary and confidence score. It should follow the following JSON schema:
+    points :[ {{
+        "label": "topic",
+        "source_text": "Based on the following search results, provide a structured research summary.\n\nSearch Results:\n{search_response.text}",
+        "citations": "Sources/Citations found:\n{citations_text}\n\nIMPORTANT: Include the above Sources/Citations in the 'sources' list of your JSON output.",
+        "confidence": between 0.0 to 1.0
+        }}
+        ]
     """
     
     response = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
+        model="gemini-2.5-flash",
         contents=[structure_prompt],
         config={
             "response_mime_type": "application/json",
@@ -148,6 +143,7 @@ def main():
     parser.add_argument("--file", type=str, help="Path to the file (PDF, Text, Audio) to analyze")
     parser.add_argument("--query", type=str, help="Initial query to ask about the file or general search")
     parser.add_argument("--speak", action="store_true", help="Speak the summary output")
+    parser.add_argument("--cache", action="store_true", help="Use context caching for the file")
     args = parser.parse_args()
 
     file_path = args.file
@@ -165,7 +161,12 @@ def main():
         print(f"File uploaded: {uploaded_file.name}")
         
         if uploaded_file.mime_type.startswith("audio/"):
-            print("Audio file detected. Using gemini-2.5-flash for transcription and analysis.")
+            print("Audio file detected.")
+
+    # Select model (use gemini-2.5-flash as it is available)
+    model_name = "gemini-2.5-flash"
+
+
 
     while True:
         if initial_query:
@@ -187,7 +188,7 @@ def main():
         try:
             response = None
             if uploaded_file:
-                response = analyze_file(client, uploaded_file, query, chat_history)
+                response = analyze_file(client, uploaded_file, query, chat_history, cache_name=cache_name)
             else:
                 response = perform_search(client, query, chat_history)
                 if not response:

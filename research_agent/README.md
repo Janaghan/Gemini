@@ -1,78 +1,76 @@
 # Research Agent
 
-This agent is designed to analyze documents (PDFs, Text files, Audio) and provide structured research summaries using Google's Gemini models. It supports interactive multi-turn conversations, Google Search with citations, and Audio Input/Output.
+A powerful multi-modal research assistant powered by Google's Gemini models. This agent can analyze documents (PDF, Text), transcribe and analyze audio, perform Google Searches with citations, and provide structured research summaries.
 
 ## Features
 
--   **Interactive Chat**: Continuous multi-turn conversation loop with context awareness.
--   **Multi-Modal Analysis**: 
-    -   **Documents**: Uploads and processes PDF and Text documents.
-    -   **Audio Input**: Transcribes and analyzes audio files (`.mp3`, `.wav`, etc.) using `gemini-2.5-flash`.
--   **Google Search**: Performs Google Searches with **citations** when no file is provided.
--   **Structured Output**: Generates JSON responses containing:
-    -   Comprehensive summary.
-    -   Key research points with relevance and confidence scores.
-    -   List of sources/citations (including URLs for search results).
--   **Audio Output**: Generates audio summaries using Gemini's TTS model (`--speak` flag).
--   **Laminar Integration**: Observes execution traces using Laminar.
+-   **Multi-Modal Analysis**:
+    -   **Documents**: Analyzes PDF and Text files.
+    -   **Audio**: Transcribes and analyzes audio files (`.wav`, `.mp3`, etc.) using `gemini-2.5-flash`.
+-   **Google Search Grounding**: Performs Google Searches with citations when no file is provided.
+-   **Interactive Mode**: Engages in a multi-turn conversation about the uploaded file or search results.
+-   **Structured Output**: Produces a JSON file (`research_result.json`) with:
+    -   Executive summary.
+    -   Key research points with confidence scores.
+    -   Citations and sources.
+-   **Audio Output (TTS)**: Optionally reads the summary aloud using Gemini's Text-to-Speech (`--speak`).
+-   **Observability**: Integrated with Laminar for execution tracing.
 
 ## Setup
 
-1.  **Environment Variables**:
-    Ensure you have a `.env` file in the project root or this directory with the following keys:
+1.  **Prerequisites**:
+    -   `uv` package manager
+
+2.  **Environment Variables**:
+    Create a `.env` file in the project root or `research_agent` directory:
     ```env
     gemini_api_key=YOUR_GEMINI_API_KEY
     laminar_api_key=YOUR_LAMINAR_API_KEY
     ```
 
-2.  **Dependencies**:
-    Install the required packages:
+3.  **Installation**:
+    From the **project root** directory (parent of `research_agent`), run:
     ```bash
     uv sync
     ```
 
 ## Usage
 
-Run the agent from the command line using `main.py`. The agent now runs in an **interactive mode** by default after the initial query.
-
-### Analyze a File
-To analyze a PDF, Text, or Audio file:
+Navigate to the `research_agent` directory:
 ```bash
-python main.py --file <path_to_file> --query "<your_query>"
-```
-**Example:**
-```bash
-python main.py --file sample_document.pdf --query "Summarize this document"
+cd research_agent
 ```
 
-### Google Search
-To perform a Google Search (without a file):
+### 1. Analyze a Document
+Analyze a local file (PDF, Text, or Audio):
 ```bash
-python main.py --query "<your_search_query>"
-```
-**Example:**
-```bash
-python main.py --query "Who won the 2023 Cricket World Cup?"
+python main.py --file path/to/document.pdf --query "What are the main findings?"
 ```
 
-### Audio Output (TTS)
-To hear the summary spoken out loud, add the `--speak` flag:
+### 2. Google Search
+Perform a grounded search without a file:
 ```bash
-python main.py --query "Tell me about black holes" --speak
+python main.py --query "Latest advancements in quantum computing"
 ```
-This will generate an `output.wav` file.
 
-### Interactive Mode
-After the initial response, the agent enters an interactive loop. You can continue asking questions about the uploaded file or perform new searches.
--   Type your follow-up query at the `User:` prompt.
--   Type `exit` or `quit` to stop the agent.
+### 3. Audio Output
+Generate a spoken summary (saves to `output.wav`):
+```bash
+python main.py --query "Explain black holes" --speak
+```
+
+### 4. Interactive Mode
+After the initial response, the agent enters an interactive loop.
+-   **Follow-up**: Type your questions to continue the conversation.
+-   **Exit**: Type `exit` or `quit` to terminate.
 
 ## Output
 
-The agent will print the analysis to the console and save the structured result to `research_result.json`. If `--speak` is used, an `output.wav` file is also created.
+-   **Console**: Displays the summary and key points.
+-   **JSON**: Saves full structured data to `research_result.json`.
+-   **Audio**: Saves TTS output to `output.wav` (if `--speak` is used).
 
 ## File Structure
 
--   `main.py`: Entry point. Handles interactive loop, file upload, and orchestrates analysis. Refactored for modularity (`analyze_file`, `perform_search`).
--   `tools.py`: Contains helper functions (`upload_file`, `text_to_speech`) and Pydantic models (`ResearchSummary`) for structured output.
-
+-   `main.py`: Core logic for file processing, search, and the interactive loop.
+-   `tools.py`: Helper functions for file upload, TTS, and Pydantic models.

@@ -5,7 +5,7 @@ from typing import List, Optional
 import os
 import mimetypes
 import wave
-
+import hashlib, time
 import json
 
 class ResearchPoint(BaseModel):
@@ -52,6 +52,8 @@ def upload_file(client, file_path: str):
     
     print(f"File uploaded: {uploaded_file.name}")
     return uploaded_file
+
+
 
 def get_google_search_tool():
     """
@@ -106,4 +108,7 @@ def text_to_speech(client, text: str, output_file: str = "output.wav"):
     except Exception as e:
         print(f"Error generating audio: {e}")
         return None
+
+
+
 

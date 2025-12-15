@@ -5,4 +5,10 @@ sample_document.pdf
 test_doc.txt
 research_result.json
 output.wav
+document.pdf
+sample.pdf
+test.py
 
+# cache
+cache/
+__pycache__/
