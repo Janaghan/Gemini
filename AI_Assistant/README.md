@@ -1,8 +1,9 @@
 # Modular Multimodal AI Assistant
 
-A powerful, low-latency AI assistant and  features a robust half-duplex audio engine, multimodal capabilities, and integrated tools.
+A high-performance, low-latency AI assistant capable of real-time voice interaction, text messaging, and file analysis
 
 ## Key Features
+
 
 ###  Advanced Audio Engine
 - **Voice Activity Detection (VAD)**: Utilizes server-side detection for natural turn-taking.
