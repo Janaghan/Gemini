@@ -11,4 +11,6 @@ dependencies = [
     "lmnr[all]>=0.7.23",
     "pandas>=2.3.3",
     "pillow>=12.0.0",
+    "pyaudio>=0.2.14",
+    "requests>=2.31.0",
 ]
