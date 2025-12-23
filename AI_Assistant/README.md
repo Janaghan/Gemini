@@ -6,7 +6,7 @@ A high-performance, low-latency AI assistant capable of real-time voice interact
 
 
 ###  Advanced Audio Engine
-- **Voice Activity Detection (VAD)**: Utilizes server-side detection for natural turn-taking.
+- **Voice Activity Detection (VAD)**: Utilizes server-side detection for natural turn-talking.
 - **Modular Design**: Audio hardware logic (`src/audio.py`) is decoupled from session logic (`src/session.py`).
 
 ###  Performance & Stats
