@@ -1,15 +1,14 @@
 # Modular Multimodal AI Assistant
 
-A powerful, low-latency AI assistant powered by the **Gemini 2.0 Flash Live API**. It features a robust half-duplex audio engine, multimodal capabilities, and integrated tools.
+A powerful, low-latency AI assistant and  features a robust half-duplex audio engine, multimodal capabilities, and integrated tools.
 
 ## Key Features
 
 ###  Advanced Audio Engine
-- **Half-Duplex Echo Cancellation**: The assistant automatically stops listening while it is speaking, preventing feedback loops and self-interruption.
 - **Voice Activity Detection (VAD)**: Utilizes server-side detection for natural turn-taking.
 - **Modular Design**: Audio hardware logic (`src/audio.py`) is decoupled from session logic (`src/session.py`).
 
-### ⚡ Performance & Stats
+###  Performance & Stats
 - **Token Stats**: Real-time display of token consumption (e.g., `[Token Usage: 1542]`).
 - **Thinking Budget**: Configurable output token limits for optimized responses.
 
@@ -36,7 +35,7 @@ A powerful, low-latency AI assistant powered by the **Gemini 2.0 Flash Live API*
 
 | Interaction | Action |
 | :--- | :--- |
-| **Speaking** | Wait for `*** 🎤 MICROPHONE ACTIVE ***`, then speak. |
+| **Speaking** | Wait for `***  MICROPHONE ACTIVE ***`, then speak. |
 | **Typing** | Type directly in the terminal at any time. |
 | **Files** | Type `/add /path/to/file.pdf` to send a file to the context. |
 
@@ -44,6 +43,6 @@ A powerful, low-latency AI assistant powered by the **Gemini 2.0 Flash Live API*
 
 - **`run_assistant.py`**: Entry point script.
 - **`src/`**:
-    - **`session.py` (The Brain)**: Manages API connection, tools, and orchestrates tasks.
-    - **`audio.py` (The Body)**: Handles Microphone, Speaker, and Network I/O streams.
+    - **`session.py` **: Manages API connection, tools, and tasks.
+    - **`audio.py` **: Handles Microphone, Speaker, and Network I/O streams.
     - **`tools.py`**: Tool definitions (Search, Air Quality).
