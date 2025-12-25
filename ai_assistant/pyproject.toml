@@ -1,0 +1,18 @@
+[project]
+name = "gemini-live-assignment"
+version = "0.1.0"
+description = "Educational Gemini Live API Assistant Assignment"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "google-genai",
+    "pyaudio",
+    "python-dotenv",
+    "websockets",
+    "pypdf",
+    "reportlab",
+    "lmnr"
+]
+
+[tool.uv]
+dev-dependencies = []

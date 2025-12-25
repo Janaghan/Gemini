@@ -1,0 +1,17 @@
+# Environment Variables
+.env
+
+
+# Python
+__pycache__/
+
+.venv/
+venv/
+env/
+
+
+# Project Specific
+memory/
+
+
+
