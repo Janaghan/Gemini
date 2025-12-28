@@ -177,6 +177,7 @@ dependencies = [
     { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "reportlab" },
+    { name = "requests" },
     { name = "websockets" },
 ]
 
@@ -188,6 +189,7 @@ requires-dist = [
     { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "reportlab" },
+    { name = "requests" },
     { name = "websockets" },
 ]
 

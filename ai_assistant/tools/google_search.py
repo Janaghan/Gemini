@@ -1,29 +1,17 @@
-import asyncio
+"""
+Google Search tool using Gemini's built-in grounding capability.
+
+This tool leverages Gemini's native Google Search integration
+for real-time information retrieval.
+"""
+
 from google.genai import types
 
-def define_tool():
-    """Returns the tool definition for Gemini."""
-    return types.Tool(
-        function_declarations=[
-            types.FunctionDeclaration(
-                name="google_search",
-                description="Search the web for current events or facts.",
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "query": types.Schema(
-                            type=types.Type.STRING,
-                            description="The search query."
-                        )
-                    },
-                    required=["query"]
-                )
-            )
-        ]
-    )
+# Define the native Google Search tool
+# This tells the Gemini API to use its built-in search capability
+GOOGLE_SEARCH_TOOL = types.Tool(google_search=types.GoogleSearch())
 
-async def execute(query: str):
-    """Simulated Google Search."""
-    # In a real app, use the Google Custom Search JSON API
-    print(f"[Simulated Search] Query: {query}")
-    return {"results": f"Simulated search results for: {query}. (Implement real search API for live data)"}
+def define_tool():
+    """Returns the native tool definition."""
+    return GOOGLE_SEARCH_TOOL
+

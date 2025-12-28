@@ -1,5 +1,7 @@
 import asyncio
 import os
+import json
+import requests
 import traceback
 import pypdf
 from google import genai
@@ -9,8 +11,12 @@ from lmnr import Laminar, observe
 
 # Import tools
 from tools import air_quality
+# Import tools
+from tools import air_quality
 from tools import google_search
 from src.audio import mic_loop, speaker_loop, shutdown
+
+tools = [air_quality.define_tool(), google_search.define_tool()]
 
 LIVE_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
 
@@ -20,35 +26,52 @@ TAG_INPUT_AUDIO = "\n--input --audio "
 TAG_INPUT_PDF = "\n--input --pdf "
 TAG_OUTPUT_TEXT = "\n--output --text "
 TAG_OUTPUT_AUDIO = "\n--output --audio "
+ 
+def get_ephemeral_token():
+    """
+    Generates an ephemeral token using the Google GenAI REST API.
+    This simulates a backend service minting a token for a client.
+    """
+    api_key = os.environ.get("gemini_api_key")
+    if not api_key:
+        raise ValueError("gemini_api_key not found in environment.")
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/tokens?key={api_key}"
+    headers = {"Content-Type": "application/json"}
+    body = {
+        "ttl": "600s" # 10 minutes
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=body)
+        response.raise_for_status()
+        token_data = response.json()
+        return token_data["name"] # Returns 'tokens/...' string
+    except Exception as e:
+        print(f" Failed to generate Ephemeral Token: {e}")
+        # Fallback to key if token fails (optional robustness)
+        return None
 
 @observe()
 async def run_chat_session():
     """Runs the Gemini Live chat session."""
-    client = genai.Client(
-        api_key=os.environ.get("gemini_api_key"),
-        http_options={"api_version": "v1alpha"}
-    )
-    
+    print("--- Connecting to Gemini Live ---")
     mic_queue = asyncio.Queue()
     output_queue = asyncio.Queue()
     interrupt_event = asyncio.Event()
     shutdown_event = asyncio.Event()
-
-    print("🚀 Live AI Assistant (Upgraded Build) starting...")
-    
-    # Define Tools
-    tools = [air_quality.define_tool(), google_search.define_tool()]
-    
-    # System Instruction: Strictly enforces modality-aware behavior
+        # System Instruction: Strictly enforces modality-aware behavior
     sys_instruction = types.Content(parts=[types.Part(text="""
     You are a highly accurate, multimodal AI assistant.
     
     CORE RULES:
-    1.  **Text Input**: If the user TYPES text, you MUST respond with a clear, concise TEXT response.
-    2.  **Audio Input**: If the user SPEAKS (audio), you MUST respond with a conversational, natural AUDIO response.
-    3.  **PDF Analysis**: If the user uploads a PDF, read the provided text context thoroughly and summarize it accurately in TEXT.
-    4.  **Accuracy**: Always prioritize factual correctness and direct answers. Do not hallucinate. 
-    5.  **Tools**: Use tools whenever external information (weather, search) is needed.
+    1.  **Strict Interaction Policy**: ONLY reply if the user actively asks a question or gives an instruction. If the user is just chatting to someone else or there is background noise, DO NOT REPLY.
+    2.  **Noise Handling**: If you perceive speech directed at you but cannot understand it due to background noise/low quality, reply EXACTLY and ONLY with audio: "I can't understand the question because of background noise".
+    3.  **Text Input**: If the user TYPES text, you MUST respond with a clear, concise TEXT response.
+    4.  **Audio Input**: If the user SPEAKS (audio) clearly, respond with a conversational, natural AUDIO response.
+    5.  **PDF Analysis**: If the user uploads a PDF, read the provided text context thoroughly and summarize it accurately in TEXT and answer the question .
+    6.  **Accuracy**: Always prioritize factual correctness and direct answers. Do not hallucinate. 
+    7.  **Tools**: Use tools whenever external information (weather, search) is needed.
     """)])
 
     config = {
@@ -56,38 +79,61 @@ async def run_chat_session():
         "response_modalities": ["AUDIO"], # Model default modality (can be overridden by text content)
         "system_instruction": sys_instruction
     }
-
-    try:
-        print("--- Connecting to Gemini Live ---")
-        async with client.aio.live.connect(model=LIVE_MODEL, config=config) as session:
-            print(" Connected")
-            print("  Listening... (Speak or Type)")
+    
+    while not shutdown_event.is_set():
+        try:
+            # 1. Generate Ephemeral Token
+            print(" Minting Ephemeral Token...", end="")
+            token = await asyncio.to_thread(get_ephemeral_token)
             
-            async with asyncio.TaskGroup() as tg:
-                # Audio Tasks (Producer/Consumer)
-                tg.create_task(mic_loop(mic_queue, interrupt_event))
-                tg.create_task(speaker_loop(output_queue, interrupt_event))
+            if token:
+                print(" Success!")
+                client_api_key = token
+            else:
+                print(" Failed (using fallback Key)")
+                client_api_key = os.environ.get("gemini_api_key")
+
+            # 2. Initialize Client with Token
+            client = genai.Client(
+                api_key=client_api_key,
+                http_options={"api_version": "v1alpha"}
+            )
+            
+            async with client.aio.live.connect(model=LIVE_MODEL, config=config) as session:
+                print(" Connected")
+                print("  Listening... (Speak or Type)")
                 
-                # Session Managers
-                tg.create_task(send_loop(session, mic_queue, shutdown_event))
-                tg.create_task(receive_loop(session, output_queue, shutdown_event))
-                tg.create_task(text_input_loop(session, shutdown_event, mic_queue, interrupt_event))
-                
-                await shutdown_event.wait()
-                
-    except asyncio.CancelledError:
-        pass
-    except ConnectionClosedError as e:
-        if "1011" in str(e) or "quota" in str(e).lower():
-            print("\n API Quota Exceeded. Please check your billing/quota settings.")
-        else:
-            print(f"\n Connection Closed: {e}")
-            # Optional: Implement auto-reconnect logic here
-    except Exception as e:
-        print(f" Session Error: {e}")
-        traceback.print_exc()
-    finally:
-        shutdown()
+                async with asyncio.TaskGroup() as tg:
+                    # Audio Tasks (Producer/Consumer)
+                    tg.create_task(mic_loop(mic_queue, interrupt_event))
+                    tg.create_task(speaker_loop(output_queue, interrupt_event))
+                    
+                    # Session Managers
+                    tg.create_task(send_loop(session, mic_queue, shutdown_event))
+                    tg.create_task(receive_loop(session, output_queue, shutdown_event))
+                    tg.create_task(text_input_loop(session, shutdown_event, mic_queue, interrupt_event))
+                    
+                    await shutdown_event.wait()
+
+        except asyncio.CancelledError:
+            break
+        except ConnectionClosedError as e:
+            if "1011" in str(e) or "quota" in str(e).lower():
+                print("\n API Quota Exceeded. Please check your billing/quota settings.")
+                break
+            else:
+                print(f"\n Connection Closed: {e}")
+                print(" Reconnecting in 2 seconds...")
+                await asyncio.sleep(2)
+                continue
+        except Exception as e:
+            print(f" Session Error: {e}")
+            traceback.print_exc()
+            print(" Reconnecting in 2 seconds...")
+            await asyncio.sleep(2)
+            await asyncio.sleep(2)
+
+    shutdown()
 
 async def text_input_loop(session, shutdown_event, mic_queue, interrupt_event):
     """Handles text input and PDF parsing."""
@@ -111,7 +157,7 @@ async def text_input_loop(session, shutdown_event, mic_queue, interrupt_event):
             # 3. PDF Detection
             content_to_send = text
             if os.path.isfile(text) and text.lower().endswith(".pdf"):
-                print(f"{TAG_INPUT_PDF}📄 Reading PDF: {text}...")
+                print(f"{TAG_INPUT_PDF} Reading PDF: {text}...")
                 try:
                     pdf_text = ""
                     reader = pypdf.PdfReader(text)
@@ -177,13 +223,13 @@ async def receive_loop(session, output_queue, shutdown_event):
                             # Audio
                             if part.inline_data:
                                 if not audio_log_printed:
-                                    print(f"{TAG_OUTPUT_AUDIO}🔊 AI Speaking...", end="", flush=True)
+                                    print(f"{TAG_OUTPUT_AUDIO} AI Speaking...", end="", flush=True)
                                     audio_log_printed = True
                                 await output_queue.put(part.inline_data.data)
                             
                             # Text (Transcript or direct text)
                             if part.text:
-                                print(f"{TAG_OUTPUT_TEXT}🤖 AI: {part.text}")
+                                print(f"{TAG_OUTPUT_TEXT} AI: {part.text}")
                         
                         # Reset audio log trigger on turn completion
                         if response.server_content.turn_complete:
@@ -199,14 +245,13 @@ async def handle_tool_call(session, tool_call):
     """Executes tools purely functionally."""
     responses = []
     for fc in tool_call.function_calls:
-        print(f"\  Tool Triggered: {fc.name} | Args: {fc.args}")
+        print(f"  Tool Triggered: {fc.name} | Args: {fc.args}")
         
         # Dispatch
         result = {"error": "Unknown tool"}
         if fc.name == "get_air_quality":
             result = await air_quality.execute(**fc.args)
-        elif fc.name == "google_search":
-            result = await google_search.execute(**fc.args)
+
 
         responses.append(
             types.FunctionResponse(

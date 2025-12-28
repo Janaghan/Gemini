@@ -34,15 +34,21 @@ The application is designed using a **Functional Event Loop** architecture, avoi
 Security is managed via environment variables. The application does **not** hardcode keys.
 
 *   **`gemini_api_key`**: Authenticates with Google GenAI.
-*   **`laminar_api_key`** (or `LMNR_PROJECT_API_KEY`): Authenticates with Laminar for observability.
+*   **`laminar_api_key`**: Authenticates with Laminar for observability.
 *   **`.env` File**: All keys are loaded from a `.env` file at runtime using `python-dotenv`.
+
+### Key Features
+1.  **Ephemeral Tokens**: Securely mints temporary tokens (10 min TTL) for every session connection.
+2.  **Auto-Reconnection**: Automatically detects connection loss and reconnects using a fresh token.
+3.  **Real Tools**: 
+    *   **Native Google Search**: Leverages Gemini's built-in grounding (no extra keys required).
+    *   **Air Quality**: Real-time data via OpenMeteo API.
 
 ##  How to Run
 
 ### Prerequisites
 *   Python 3.11+
 *   `uv` (Package Manager) or `pip`
-*   **API Keys**: Google Gemini API Key, Laminar Project API Key.
 
 ### Setup
 1.  **Clone & Navigate**:
@@ -54,7 +60,7 @@ Security is managed via environment variables. The application does **not** hard
 2.  **Environment Variables**:
     Create a `.env` file in the `ai_assistant` directory:
     ```env
-    gemini_api_key="YOUR_GOOGLE_API_KEY"
+    gemini_api_key="YOUR_GOOGLE_KEY"
     laminar_api_key="YOUR_LAMINAR_KEY"
     ```
 

@@ -11,7 +11,8 @@ dependencies = [
     "websockets",
     "pypdf",
     "reportlab",
-    "lmnr"
+    "lmnr",
+    "requests"
 ]
 
 [tool.uv]

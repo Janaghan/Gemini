@@ -98,6 +98,7 @@ async def mic_loop(mic_queue, interrupt_event):
                         pre_roll_buffer.append(data)
                         
             except OSError:
+                await asyncio.sleep(0.1)
                 continue
                 
     except asyncio.CancelledError:
