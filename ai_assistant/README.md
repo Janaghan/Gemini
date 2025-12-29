@@ -4,7 +4,7 @@ A real-time, multimodal AI assistant built with Google's **Gemini Live API**. Th
 
 ##  Modes of Operation
 
-You can run the assistant in two modes from this directory:
+You can run the assistant from this directory:
 
 ###  Web Interface (Recommended)
 A full-featured browser interface supporting Audio loops, Text chat, and PDF uploads.
