@@ -2,11 +2,9 @@
 
 A real-time, multimodal AI assistant built with Google's **Gemini Live API**. This project supports both a terminal-based **CLI** and a modern **Web Interface**, featuring advanced audio handling, secure session management, and observability integration.
 
-##  Modes of Operation
 
-You can run the assistant from this directory:
 
-###  Web Interface (Recommended)
+###  Web Interface
 A full-featured browser interface supporting Audio loops, Text chat, and PDF uploads.
 
 *   **Command**: `uv run app.py`
