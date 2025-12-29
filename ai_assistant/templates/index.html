@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant - Web Interface</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            height: 100vh;
+            margin: 0;
+        }
+
+        h1 {
+            margin-bottom: 2rem;
+        }
+
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 80%;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        .controls {
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #connectBtn {
+            background-color: #007bff;
+            color: white;
+        }
+
+        #connectBtn:hover {
+            background-color: #0056b3;
+        }
+
+        #disconnectBtn {
+            background-color: #dc3545;
+            color: white;
+            display: none;
+        }
+
+        #disconnectBtn:hover {
+            background-color: #a71d2a;
+        }
+
+        #micBtn {
+            background-color: #28a745;
+            color: white;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #micBtn.active {
+            background-color: #dc3545;
+            animation: pulse 1.5s infinite;
+        }
+
+        .status {
+            margin-bottom: 1rem;
+            font-weight: bold;
+            color: #666;
+        }
+
+        #log-area {
+            width: 100%;
+            height: 300px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 10px;
+            overflow-y: auto;
+            text-align: left;
+            background: #fafafa;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Gemini AI Assistant</h1>
+
+    <div class="container">
+        <div class="status" id="status">Disconnected</div>
+
+        <div class="controls">
+            <button id="connectBtn">Connect</button>
+            <button id="disconnectBtn">Disconnect</button>
+        </div>
+
+        <div class="controls">
+            <button id="micBtn">mic</button>
+        </div>
+
+        <div class="controls">
+            <input type="text" id="textInput" placeholder="Type a message..." style="padding: 10px; width: 60%;">
+            <button id="sendTextBtn">Send Text</button>
+        </div>
+
+        <div class="controls">
+            <input type="file" id="pdfInput" accept=".pdf">
+            <button id="uploadPdfBtn">Upload PDF & Analyze</button>
+        </div>
+
+        <div id="log-area"></div>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const micBtn = document.getElementById('micBtn');
+        const logArea = document.getElementById('log-area');
+
+        // Text/PDF UI
+        const textInput = document.getElementById('textInput');
+        const sendTextBtn = document.getElementById('sendTextBtn');
+        const pdfInput = document.getElementById('pdfInput');
+        const uploadPdfBtn = document.getElementById('uploadPdfBtn');
+
+        let ws = null;
+        let audioContext = null;
+        let processor = null;
+        let inputSource = null;
+        let isRecording = false;
+
+        const MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"; // Matches Python implementation
+
+        function log(msg) {
+            const div = document.createElement('div');
+            div.textContent = `> ${msg}`;
+            logArea.appendChild(div);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        async function getEphemeralToken() {
+            try {
+                const response = await fetch('/token', { method: 'POST' });
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                return data.token;
+            } catch (err) {
+                log(`Token Error: ${err.message}`);
+                return null;
+            }
+        }
+
+        // --- Text & PDF Handling ---
+
+        async function sendText(text) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log("Error: Not connected");
+                return;
+            }
+
+            // Construct Client Content Message
+            const msg = {
+                client_content: {
+                    turns: [{
+                        role: "user",
+                        parts: [{ text: text }]
+                    }],
+                    turn_complete: true
+                }
+            };
+
+            ws.send(JSON.stringify(msg));
+            log(`You: ${text}`);
+        }
+
+        sendTextBtn.onclick = () => {
+            const text = textInput.value;
+            if (text.trim()) {
+                sendText(text);
+                textInput.value = '';
+            }
+        };
+
+        uploadPdfBtn.onclick = async () => {
+            const file = pdfInput.files[0];
+            if (!file) {
+                log("Please select a PDF file first.");
+                return;
+            }
+
+            log(`Uploading ${file.name}...`);
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/extract_pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.error) {
+                    log(`PDF Error: ${data.error}`);
+                    return;
+                }
+
+                const pdfText = data.text;
+                const contentToSend = `CONTEXT: The user uploaded a PDF named '${file.name}'. Reading content...\n-- BEGIN PDF CONTENT --\n${pdfText}\n-- END PDF CONTENT --\n\nUSER REQUEST: Please analyze the document above and provide a summary.`;
+
+                log("PDF Text extracted. Sending to AI...");
+                sendText(contentToSend);
+
+            } catch (e) {
+                log(`Upload Error: ${e.message}`);
+            }
+        };
+
+        async function connect() {
+            log("Getting token...");
+            const token = await getEphemeralToken();
+            if (!token) return;
+
+            // log(`Token received (${token.substring(0, 10)}...). Connecting to Backend Proxy...`);
+            log(`Token received . Connecting to Backend ...`);
+
+
+            // Connect to our Backend Proxy
+            // Protocol: ws:// or wss:// based on current page
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host;
+            const uri = `${protocol}//${host}/ws_stream?token=${token}`;
+
+            ws = new WebSocket(uri);
+
+            ws.onopen = () => {
+                log("Connected to Gemini Live!");
+                statusEl.textContent = "Connected";
+                monitorConnection();
+
+                // Keep-Alive / Setup if needed
+                sendSetup();
+            };
+
+            ws.onmessage = async (event) => {
+                let data = event.data;
+                if (data instanceof Blob) {
+                    data = await data.text();
+                }
+                const msg = JSON.parse(data);
+
+                if (msg.serverContent) {
+                    if (msg.serverContent.modelTurn) {
+                        const parts = msg.serverContent.modelTurn.parts;
+                        parts.forEach(p => {
+                            if (p.text) {
+                                log(`AI: ${p.text}`);
+                            }
+                            if (p.inlineData && p.inlineData.mimeType.startsWith("audio/pcm")) {
+                                playAudioChunk(p.inlineData.data);
+                            }
+                        });
+                    }
+                }
+            };
+
+            ws.onerror = (err) => {
+                log("WebSocket Error");
+                console.error(err);
+            };
+
+            ws.onclose = (e) => {
+                log(`Disconnected (Code: ${e.code}, Reason: ${e.reason})`);
+                statusEl.textContent = "Disconnected";
+                resetUI();
+            };
+        }
+
+        // --- Audio Playback ---
+        let audioQueue = [];
+        let nextPlayTime = 0;
+        let playbackContext = null;
+
+        function playAudioChunk(base64Data) {
+            if (!playbackContext) {
+                playbackContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+                nextPlayTime = playbackContext.currentTime;
+            }
+
+            const binaryString = atob(base64Data);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            const pcm16 = new Int16Array(bytes.buffer);
+            const float32 = new Float32Array(pcm16.length);
+
+            for (let i = 0; i < pcm16.length; i++) {
+                float32[i] = pcm16[i] / 32768.0;
+            }
+
+            const buffer = playbackContext.createBuffer(1, float32.length, 24000);
+            buffer.getChannelData(0).set(float32);
+
+            const source = playbackContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(playbackContext.destination);
+
+            if (nextPlayTime < playbackContext.currentTime) {
+                nextPlayTime = playbackContext.currentTime;
+            }
+            source.start(nextPlayTime);
+            nextPlayTime += buffer.duration;
+        }
+
+        function sendSetup() {
+            const setupMsg = {
+                setup: {
+                    model: `models/${MODEL}`,
+                    generationConfig: {
+                        responseModalities: ["AUDIO"]
+                    }
+                }
+            };
+            ws.send(JSON.stringify(setupMsg));
+            log("Setup message sent.");
+        }
+
+        function resetUI() {
+            connectBtn.style.display = 'inline-block';
+            disconnectBtn.style.display = 'none';
+            micBtn.style.display = 'none';
+            if (isRecording) stopAudio();
+        }
+
+        function monitorConnection() {
+            connectBtn.style.display = 'none';
+            disconnectBtn.style.display = 'inline-block';
+            micBtn.style.display = 'flex';
+        }
+
+        connectBtn.onclick = connect;
+        disconnectBtn.onclick = () => { if (ws) ws.close(); };
+
+        // --- Audio Handling (Basic) ---
+        micBtn.onclick = () => {
+            if (!isRecording) startAudio();
+            else stopAudio();
+        };
+
+        async function startAudio() {
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error("Browser API 'navigator.mediaDevices' is not available. Please ensure you are using HTTPS or localhost.");
+                }
+
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 16000
+                    }
+                });
+
+                inputSource = audioContext.createMediaStreamSource(stream);
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+                inputSource.connect(processor);
+                processor.connect(audioContext.destination);
+
+                processor.onaudioprocess = (e) => {
+                    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+                    const inputData = e.inputBuffer.getChannelData(0);
+                    // Convert float32 to int16 (PCM)
+                    const pcmData = new Int16Array(inputData.length);
+                    for (let i = 0; i < inputData.length; i++) {
+                        let s = Math.max(-1, Math.min(1, inputData[i]));
+                        pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
+
+                    // Convert to base64
+                    const base64Audio = btoa(String.fromCharCode(...new Uint8Array(pcmData.buffer)));
+
+                    ws.send(JSON.stringify({
+                        realtimeInput: {
+                            mediaChunks: [{
+                                mimeType: "audio/pcm",
+                                data: base64Audio
+                            }]
+                        }
+                    }));
+                };
+
+                isRecording = true;
+                micBtn.classList.add('active');
+                log("Microphone Active");
+
+            } catch (e) {
+                log(`Mic Error: ${e.message}`);
+            }
+        }
+
+        function stopAudio() {
+            if (processor) {
+                processor.disconnect();
+                inputSource.disconnect();
+            }
+            if (audioContext) audioContext.close();
+            isRecording = false;
+            micBtn.classList.remove('active');
+            log("Microphone Stopped");
+        }
+
+    </script>
+</body>
+
+</html>

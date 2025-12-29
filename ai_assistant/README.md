@@ -1,54 +1,46 @@
 # AI Assistant (Gemini Live API)
 
-A real-time, multimodal AI assistant built with Google's **Gemini Live API**. This project demonstrates advanced audio handling, functional session management, and observability integration.
+A real-time, multimodal AI assistant built with Google's **Gemini Live API**. This project supports both a terminal-based **CLI** and a modern **Web Interface**, featuring advanced audio handling, secure session management, and observability integration.
 
-##  Architecture
+##  Modes of Operation
 
-The application is designed using a **Functional Event Loop** architecture, avoiding complex class hierarchies for clarity and performance.
+You can run the assistant in two modes from this directory:
 
-*   **`main.py`**: Entry point. Handles environment setup, Laminar initialization, and starts the async session.
-*   **`src/session.py`**: The core brain.
-    *   **`run_chat_session`**: Orchestrates the WebSocket connection.
-    *   **Input Loops**: `text_input_loop` (Text/PDF) and `send_loop` (Audio) capture user intent.
-    *   **Output Loop**: `receive_loop` processes AI responses (Text/Audio) and triggers tools.
-    *   **Tags**: Uses strict tags (`--input --text`, `--input --audio`) to ensure the model distinguishes modalities.
-*   **`src/audio.py`**: Advanced Audio Engine.
-    *   **VAD (Voice Activity Detection)**: Uses a Hysteresis Gate (Start/Stop thresholds) to filter noise.
-    *   **Pre-roll Buffering**: Captures the split-second before speech to prevent cut-off words.
-    *   **Split-Rate I/O**: Microsphone @ 16kHz (Stability), Speaker @ 24kHz (High Quality).
-*   **`tools/`**: Modular tool definitions (e.g., `google_search`, `air_quality`).
-*   **Observability**: Integrated with **Laminar** (`lmnr`) for real-time tracing of sessions and tool calls.
+###  Web Interface (Recommended)
+A full-featured browser interface supporting Audio loops, Text chat, and PDF uploads.
 
-##  Live API Flow
+*   **Command**: `uv run app.py`
+*   **Architecture**: Backend Proxy (`flask-sock`)
+    *   **Browser**: Connects to local WebSocket (`/ws_stream`) using a secure, short-lived **Local JWT**.
+    *   **Backend**: Authenticates the JWT, then proxies the connection to Gemini Live using your **Real API Key**.
+    *   **Security**: Your real Gemini API Key never leaves the server.
 
-1.  **Connect**: The client establishes a bidirectional WebSocket connection with `gemini-2.5-flash-native-audio-preview`.
-2.  **Session Start**: System instructions are sent, defining the assistant's persona and modality rules (Text -> Text, Audio -> Audio).
-3.  **Interaction Loop**:
-    *   **User Audio**: Captures -> VAD Filter -> Stream to API.
-    *   **User Text**: Captures -> Tagging -> Send to API.
-    *   **Model Response**: Streams back audio chunks (played immediately) and text chunks (printed).
-    *   **Tool Call**: If the model requests a tool, the client executes it locally and sends the result back in the same session.
 
-##  Token & Key Handling
 
-Security is managed via environment variables. The application does **not** hardcode keys.
+##  Architecture & Features
 
-*   **`gemini_api_key`**: Authenticates with Google GenAI.
-*   **`laminar_api_key`**: Authenticates with Laminar for observability.
-*   **`.env` File**: All keys are loaded from a `.env` file at runtime using `python-dotenv`.
+### Core Components
+*   **`src/session.py`**: The shared brain. Handles session management, token generation (Local JWT), and message loops.
+*   **`src/audio.py`**: Audio engine with VAD and Split-Rate I/O (16kHz in / 24kHz out).
+*   **`app.py`**: Flask server for the Web Interface. Implements the WebSocket Proxy.
+
 
 ### Key Features
-1.  **Ephemeral Tokens**: Securely mints temporary tokens (10 min TTL) for every session connection.
-2.  **Auto-Reconnection**: Automatically detects connection loss and reconnects using a fresh token.
-3.  **Real Tools**: 
-    *   **Native Google Search**: Leverages Gemini's built-in grounding (no extra keys required).
-    *   **Air Quality**: Real-time data via OpenMeteo API.
+*   **Multimodal**: Simultaneous Audio, Text, and PDF interaction.
+*   **Secure Auth**: Implements a **Backend Proxy** pattern. The frontend never sees the API Key.
+*   **Resiliency**: Auto-reconnection and extensive error handling (Code 1007/1008 fixes).
+*   **Live Tools**:
+    *   **Google Search**: Built-in grounding.
+    *   **Air Quality**: Real-time data fetching.
+*   **Observability**: Integrated with **Laminar** for session tracing.
+
+
 
 ##  How to Run
 
 ### Prerequisites
 *   Python 3.11+
-*   `uv` (Package Manager) or `pip`
+*   `uv` (Package Manager) - Recommended for dependency management.
 
 ### Setup
 1.  **Clone & Navigate**:
@@ -58,19 +50,33 @@ Security is managed via environment variables. The application does **not** hard
     ```
 
 2.  **Environment Variables**:
-    Create a `.env` file in the `ai_assistant` directory:
+    Create a `.env` file in the root directory:
     ```env
     gemini_api_key="YOUR_GOOGLE_KEY"
-    laminar_api_key="YOUR_LAMINAR_KEY"
+    laminar_api_key="YOUR_LAMINAR_KEY" # Optional
+    JWT_SECRET="JWT_SECRET"            
     ```
 
-3.  **Run**:
-    Use `uv` to handle dependencies and execution automatically:
+### Running the Web Interface
+1.  Start the server:
     ```bash
-    uv run main.py
+    uv run app.py
     ```
+2.  Open your browser to: `http://localhost:1234` (or the port shown in terminal).
+3.  Click **Connect** to start talking!
 
-### CLI Interaction
-*   **Speak**: Just talk! The VAD will detect your voice.
-*   **Type**: Type your message in the console and hit Enter.
-*   **PDF**: Type the path to a PDF file (e.g., `/path/to/doc.pdf`) to have the AI analyze it.
+
+
+---
+
+## Technical Details
+
+### Backend Proxy Flow (Web)
+1.  **Connect**: Browser requests `/token`. Backend issues a **Local JWT** (TTL 10 mins).
+2.  **WebSocket**: Browser connects to `ws://localhost:1234/ws_stream?token=JWT`.
+3.  **Proxy**: Backend verifies valid JWT. If valid, opens a secure WebSocket to Google's `v1alpha` endpoint using the **Real API Key**.
+4.  **Stream**: Audio/Text chunks are piped bidirectionally between Browser <-> Backend <-> Gemini.
+
+### Audio Pipeline
+*   **Input**: `navigator.mediaDevices` (Web) -> 16kHz PCM.
+*   **Output**: Gemini 24kHz PCM -> Web Audio API (Web) 

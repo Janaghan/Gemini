@@ -12,7 +12,12 @@ dependencies = [
     "pypdf",
     "reportlab",
     "lmnr",
-    "requests"
+    "requests",
+    "fastapi>=0.128.0",
+    "uvicorn>=0.40.0",
+    "flask>=3.1.2",
+    "pyjwt",
+    "flask-sock>=0.7.0",
 ]
 
 [tool.uv]

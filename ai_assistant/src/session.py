@@ -8,9 +8,8 @@ from google import genai
 from google.genai import types
 from websockets.exceptions import ConnectionClosedError
 from lmnr import Laminar, observe
-
-# Import tools
-from tools import air_quality
+import jwt
+import datetime
 # Import tools
 from tools import air_quality
 from tools import google_search
@@ -27,35 +26,47 @@ TAG_INPUT_PDF = "\n--input --pdf "
 TAG_OUTPUT_TEXT = "\n--output --text "
 TAG_OUTPUT_AUDIO = "\n--output --audio "
  
-def get_ephemeral_token():
-    """
-    Generates an ephemeral token using the Google GenAI REST API.
-    This simulates a backend service minting a token for a client.
-    """
-    api_key = os.environ.get("gemini_api_key")
-    if not api_key:
-        raise ValueError("gemini_api_key not found in environment.")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/tokens?key={api_key}"
-    headers = {"Content-Type": "application/json"}
-    body = {
-        "ttl": "600s" # 10 minutes
+
+# Internal JWT Config
+JWT_SECRET = os.environ.get("jwt_secret")
+JWT_ALGO = "HS256"
+TOKEN_TTL_SECONDS = 300 # 10 minutes
+
+GEMINI_API_KEY = os.environ.get("gemini_api_key")
+
+def create_ephemeral_token():
+    """
+    Creates a LOCAL Ephemeral Token (JWT) for the client to authenticate
+    with our backend proxy.
+    """
+    payload = {
+        "exp": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=TOKEN_TTL_SECONDS),
+        "iat": datetime.datetime.now(datetime.timezone.utc),
+        "sub": "user_session"
     }
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
+    print(f"DEBUG: Minted Local JWT token created..")
+    return token
 
+def require_token(token):
+    """
+    Verifies the LOCAL JWT.
+    """
     try:
-        response = requests.post(url, headers=headers, json=body)
-        response.raise_for_status()
-        token_data = response.json()
-        return token_data["name"] # Returns 'tokens/...' string
-    except Exception as e:
-        print(f" Failed to generate Ephemeral Token: {e}")
-        # Fallback to key if token fails (optional robustness)
-        return None
+        decoded = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
+        return True
+    except jwt.ExpiredSignatureError:
+        print("DEBUG: Token has expired")
+        raise PermissionError("Token expired")
+    except jwt.InvalidTokenError:
+        print("DEBUG: Invalid token")
+        raise PermissionError("Invalid token")
 
 @observe()
 async def run_chat_session():
-    """Runs the Gemini Live chat session."""
     print("--- Connecting to Gemini Live ---")
+
     mic_queue = asyncio.Queue()
     output_queue = asyncio.Queue()
     interrupt_event = asyncio.Event()
@@ -65,13 +76,17 @@ async def run_chat_session():
     You are a highly accurate, multimodal AI assistant.
     
     CORE RULES:
-    1.  **Strict Interaction Policy**: ONLY reply if the user actively asks a question or gives an instruction. If the user is just chatting to someone else or there is background noise, DO NOT REPLY.
+    1.  **Strict Interaction Policy**: ONLY reply if the user actively asks a question or gives an instruction. If the user is just chatting to someone else or there is background noise, DO NOT REPLY, and you should reply in English.
     2.  **Noise Handling**: If you perceive speech directed at you but cannot understand it due to background noise/low quality, reply EXACTLY and ONLY with audio: "I can't understand the question because of background noise".
     3.  **Text Input**: If the user TYPES text, you MUST respond with a clear, concise TEXT response.
     4.  **Audio Input**: If the user SPEAKS (audio) clearly, respond with a conversational, natural AUDIO response.
     5.  **PDF Analysis**: If the user uploads a PDF, read the provided text context thoroughly and summarize it accurately in TEXT and answer the question .
     6.  **Accuracy**: Always prioritize factual correctness and direct answers. Do not hallucinate. 
-    7.  **Tools**: Use tools whenever external information (weather, search) is needed.
+    7.  **Search Output**: When using Google Search, ALWAYS structure your answer as:
+        *   **Topic**: <Brief Topic>
+        *   **Summary**: <concise summary of findings>
+        *   **Citations**: <list source names/URLs found in grounding>
+    8.  **Tools**: Use tools whenever external information (weather, search) is needed.
     """)])
 
     config = {
@@ -82,16 +97,8 @@ async def run_chat_session():
     
     while not shutdown_event.is_set():
         try:
-            # 1. Generate Ephemeral Token
-            print(" Minting Ephemeral Token...", end="")
-            token = await asyncio.to_thread(get_ephemeral_token)
-            
-            if token:
-                print(" Success!")
-                client_api_key = token
-            else:
-                print(" Failed (using fallback Key)")
-                client_api_key = os.environ.get("gemini_api_key")
+            print(" Connecting using backend Gemini API key")
+            client_api_key = create_ephemeral_token()
 
             # 2. Initialize Client with Token
             client = genai.Client(
@@ -114,7 +121,6 @@ async def run_chat_session():
                     tg.create_task(text_input_loop(session, shutdown_event, mic_queue, interrupt_event))
                     
                     await shutdown_event.wait()
-
         except asyncio.CancelledError:
             break
         except ConnectionClosedError as e:
@@ -134,6 +140,8 @@ async def run_chat_session():
             await asyncio.sleep(2)
 
     shutdown()
+
+
 
 async def text_input_loop(session, shutdown_event, mic_queue, interrupt_event):
     """Handles text input and PDF parsing."""
