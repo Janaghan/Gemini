@@ -29,7 +29,7 @@ TAG_OUTPUT_AUDIO = "\n--output --audio "
 
 
 # Internal JWT Config
-JWT_SECRET = os.environ.get("jwt_secret", "dev_secret_use_in_prod")
+JWT_SECRET = os.environ.get("jwt key")
 JWT_ALGO = "HS256"
 TOKEN_TTL_SECONDS = 600 # 10 minutesww
 
