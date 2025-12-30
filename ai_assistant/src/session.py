@@ -29,9 +29,9 @@ TAG_OUTPUT_AUDIO = "\n--output --audio "
 
 
 # Internal JWT Config
-JWT_SECRET = os.environ.get("jwt_secret")
+JWT_SECRET = os.environ.get("jwt_secret", "dev_secret_use_in_prod")
 JWT_ALGO = "HS256"
-TOKEN_TTL_SECONDS = 300 # 10 minutes
+TOKEN_TTL_SECONDS = 600 # 10 minutesww
 
 GEMINI_API_KEY = os.environ.get("gemini_api_key")
 

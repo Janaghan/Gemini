@@ -227,12 +227,20 @@
             }
 
             log(`Uploading ${file.name}...`);
+
+            // Get token for upload authentication
+            const token = await getEphemeralToken();
+            if (!token) return;
+
             const formData = new FormData();
             formData.append('file', file);
 
             try {
                 const res = await fetch('/extract_pdf', {
                     method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: formData
                 });
                 const data = await res.json();
@@ -243,7 +251,7 @@
                 }
 
                 const pdfText = data.text;
-                const contentToSend = `CONTEXT: The user uploaded a PDF named '${file.name}'. Reading content...\n-- BEGIN PDF CONTENT --\n${pdfText}\n-- END PDF CONTENT --\n\nUSER REQUEST: Please analyze the document above and provide a summary.`;
+                const contentToSend = `CONTEXT: A PDF file named '${file.name}' was uploaded by the user. Its contents appear below.\n-- BEGIN PDF CONTENT --\n-- END PDF CONTENT --\n\nUSER REQUEST: Analyze the document, summarize its key points, and respond to the questions.`;
 
                 log("PDF Text extracted. Sending to AI...");
                 sendText(contentToSend);
