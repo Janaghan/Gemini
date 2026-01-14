@@ -1,67 +1,112 @@
 import datetime
 from zoneinfo import ZoneInfo
+import requests
 from google.adk.agents import Agent
 
-def get_weather(city: str) -> dict:
-    """Retrieves the current weather report for a specified city.
 
-    Args:
-        city (str): The name of the city for which to retrieve the weather report.
+def get_location_data(city_name: str) -> dict:
+    """Retrieve location data including timezone and coordinates."""
+    try:
+        url = (
+            "https://geocoding-api.open-meteo.com/v1/search"
+            f"?name={city_name}&count=1&language=en&format=json"
+        )
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
 
-    Returns:
-        dict: status and result or error msg.
-    """
-    if city.lower() == "new york":
+        if not data.get("results"):
+            return None
+
+        result = data["results"][0]
         return {
-            "status": "success",
-            "report": (
-                "The weather in New York is sunny with a temperature of 25 degrees"
-                " Celsius (77 degrees Fahrenheit)."
-            ),
+            "name": result["name"],
+            "timezone": result["timezone"],
+            "latitude": result["latitude"],
+            "longitude": result["longitude"],
+            "country": result["country"],
         }
-    else:
+    except Exception as e:
+        print(f"Location error: {e}")
+        return None
+
+
+def get_weather(city: str) -> dict:
+    """Get live weather data for a city using Open-Meteo."""
+    location = get_location_data(city)
+
+    if not location:
         return {
             "status": "error",
-            "error_message": f"Weather information for '{city}' is not available.",
+            "error_message": f"Could not find location data for '{city}'.",
+        }
+
+    try:
+        weather_url = (
+            "https://api.open-meteo.com/v1/forecast"
+            f"?latitude={location['latitude']}"
+            f"&longitude={location['longitude']}"
+            "&current_weather=true"
+        )
+
+        response = requests.get(weather_url, timeout=10)
+        response.raise_for_status()
+        weather_data = response.json()
+
+        current = weather_data.get("current_weather")
+        if not current:
+            raise ValueError("No current weather data")
+
+        report = (
+            f"The current weather in {location['name']}, {location['country']} is "
+            f"{current['temperature']}°C with wind speed "
+            f"{current['windspeed']} km/h."
+        )
+
+        return {"status": "success", "report": report}
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error_message": f"Failed to fetch weather data: {str(e)}",
         }
 
 
 def get_current_time(city: str) -> dict:
-    """Returns the current time in a specified city.
+    """Get the current local time in a city."""
+    location = get_location_data(city)
 
-    Args:
-        city (str): The name of the city for which to retrieve the current time.
-
-    Returns:
-        dict: status and result or error msg.
-    """
-
-    if city.lower() == "new york":
-        tz_identifier = "America/New_York"
-    else:
+    if not location or not location.get("timezone"):
         return {
             "status": "error",
-            "error_message": (
-                f"Sorry, I don't have timezone information for {city}."
-            ),
+            "error_message": f"Could not determine timezone for '{city}'.",
         }
 
-    tz = ZoneInfo(tz_identifier)
-    now = datetime.datetime.now(tz)
-    report = (
-        f'The current time in {city} is {now.strftime("%Y-%m-%d %H:%M:%S %Z%z")}'
-    )
-    return {"status": "success", "report": report}
+    try:
+        tz = ZoneInfo(location["timezone"])
+        now = datetime.datetime.now(tz)
+
+        report = (
+            f"The current time in {location['name']}, {location['country']} is "
+            f"{now.strftime('%Y-%m-%d %H:%M:%S %Z%z')}"
+        )
+
+        return {"status": "success", "report": report}
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error_message": f"Time calculation error: {str(e)}",
+        }
 
 
 root_agent = Agent(
     name="weather_time_agent",
-    model="gemini-2.0-flash",
-    description=(
-        "Agent to answer questions about the time and weather in a city."
-    ),
+    model="gemini-2.5-flash-lite",
+    description="Answers questions about live weather and local time in a city.",
     instruction=(
-        "You are a helpful agent who can answer user questions about the time and weather in a city."
+        "You are a helpful assistant that provides accurate, live weather "
+        "and local time information for cities around the world."
     ),
     tools=[get_weather, get_current_time],
 )
